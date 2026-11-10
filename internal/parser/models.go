@@ -34,8 +34,25 @@ type Plan struct {
 	TotalDurationMs  float64           `json:"total_duration_ms"`
 	Settings         map[string]string `json:"settings,omitempty"`
 	TriggerDetails   []TriggerInfo     `json:"trigger_details,omitempty"`
+	JIT              *JITStats         `json:"jit,omitempty"`
 	RawInput         string            `json:"raw_input,omitempty"`
 	Summary          PlanSummary       `json:"summary"`
+}
+
+// JITStats holds Just-In-Time compilation details.
+type JITStats struct {
+	Functions int             `json:"functions"`
+	Options   map[string]bool `json:"options,omitempty"`
+	Timing    JITTiming       `json:"timing"`
+}
+
+// JITTiming details individual stages of JIT compilation.
+type JITTiming struct {
+	GenerationMs   float64 `json:"generation_ms"`
+	InliningMs     float64 `json:"inlining_ms"`
+	OptimizationMs float64 `json:"optimization_ms"`
+	EmissionMs     float64 `json:"emission_ms"`
+	TotalMs        float64 `json:"total_ms"`
 }
 
 // TriggerInfo stores execution timing for database triggers invoked during execution.

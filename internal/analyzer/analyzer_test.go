@@ -72,3 +72,62 @@ func TestAnalysisAndAdvisor(t *testing.T) {
 		t.Errorf("expected anonymized table name, got %s", scrubbed.Root.RelationName)
 	}
 }
+
+func TestJITAndFunctionalIndex(t *testing.T) {
+	planWithJIT := `[
+  {
+    "Plan": {
+      "Node Type": "Seq Scan",
+      "Relation Name": "users",
+      "Total Cost": 100.0,
+      "Plan Rows": 1000,
+      "Actual Startup Time": 0.05,
+      "Actual Total Time": 5.0,
+      "Actual Rows": 10,
+      "Actual Loops": 1,
+      "Filter": "(lower(email) = 'test@example.com'::text)"
+    },
+    "Execution Time": 5.0,
+    "JIT": {
+      "Functions": 4,
+      "Timing": {
+        "Generation": 2.0,
+        "Inlining": 5.0,
+        "Optimization": 15.0,
+        "Emission": 8.0,
+        "Total": 30.0
+      }
+    }
+  }
+]`
+
+	plan, err := parser.ParsePostgresJSON([]byte(planWithJIT))
+	if err != nil {
+		t.Fatalf("failed to parse plan: %v", err)
+	}
+
+	if plan.JIT == nil || plan.JIT.Timing.TotalMs != 30.0 {
+		t.Fatalf("expected JIT total 30.0, got %v", plan.JIT)
+	}
+
+	indexRecs := advisor.RecommendIndexes(plan)
+	if len(indexRecs) == 0 {
+		t.Fatalf("expected functional index recommendation")
+	}
+
+	rec := indexRecs[0]
+	if !rec.IsFunctional {
+		t.Errorf("expected functional index flag")
+	}
+	if rec.HypoPGSQL == "" {
+		t.Errorf("expected HypoPG SQL script")
+	}
+
+	report := analyzer.EvaluatePlan(plan, indexRecs)
+	if report.JITFinding == nil {
+		t.Errorf("expected JIT overhead finding")
+	}
+	if report.JITFinding.JITTimeMs != 30.0 {
+		t.Errorf("expected 30ms JIT time, got %f", report.JITFinding.JITTimeMs)
+	}
+}

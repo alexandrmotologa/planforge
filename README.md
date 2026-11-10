@@ -12,7 +12,12 @@ PlanForge runs completely offline and local-first. It replaces third-party cloud
 - **Latency bottleneck detection**: Flags operators taking more than 50% of overall query execution time as critical time hogs.
 - **Planner estimation anomaly checks**: Compares actual row counts against planner row estimates. Discrepancies exceeding 10x signal stale catalog statistics and provide table-level `ANALYZE` commands.
 - **Buffer cache and disk inspection**: Computes shared buffer hit ratios and converts physical disk block reads into total megabytes read from storage.
-- **Automated missing index advisor**: Synthesizes production-ready `CREATE INDEX CONCURRENTLY` statements for PostgreSQL and standard index DDL for MySQL based on filter predicates and sort keys.
+- **Automated missing index advisor**: Synthesizes production-ready `CREATE INDEX CONCURRENTLY` statements for PostgreSQL, standard index DDL for MySQL, and functional index expressions (`lower(email)`). Includes HypoPG simulation scripts for testing index impact before allocating physical storage.
+- **Deep SQL anti-pattern diagnostics**: Detects correlated SubPlan loops executed in iterations, implicit typecasting that disables indexes, and lossy bitmap heap rechecks.
+- **JIT compilation overhead detector**: Flags queries where Just-In-Time compilation duration exceeds actual execution time, providing tuning recommendations (`SET jit = off;`).
+- **Live database query runner**: Executes queries directly against live PostgreSQL and MySQL databases, wrapping write queries in rolled-back transactions for safe inspection.
+- **Execution FlameChart visualizer**: Displays hierarchical time proportions where widths match exact execution duration percentages.
+- **Zero-server shareable URLs**: Encodes execution plans into URL hash fragments for sharing across teams without a central database.
 - **Client-side schema anonymizer**: Replaces table names, column names, and literal filter parameters with generic tokens to enable safe team sharing without exposing business data.
 - **Plan comparison (A/B diff)**: Compares baseline and optimized query execution plans side by side, reporting percentage reductions in execution time, planner cost, and disk block reads.
 - **Standalone offline HTML export**: Exports self-contained interactive HTML reports that open in any browser without internet access or CDN dependencies.
@@ -57,24 +62,30 @@ planforge serve --port 8080 --open
 ```
 Open `http://127.0.0.1:8080` in your web browser. Paste your query plan or select one of the built-in sample presets.
 
-### 2. Analyze plans from the command line
+### 2. Execute directly against a live database
+Run `EXPLAIN (ANALYZE, BUFFERS)` against a database and view the terminal report or open the browser:
+```bash
+planforge run --db "postgres://user:pass@localhost:5432/mydb" "SELECT * FROM orders WHERE tenant_id = 42;" --open
+```
+
+### 3. Analyze plans from a file or stdin
 Inspect query execution plans directly in the terminal:
 ```bash
 planforge analyze plan.json
 ```
 Output includes execution timings, time hog classifications, buffer cache efficiency, and recommended index statements.
 
-### 3. Generate a standalone offline HTML report
+### 4. Generate a standalone offline HTML report
 ```bash
 planforge export plan.json -o report.html
 ```
 
-### 4. Compare baseline and optimized plans
+### 5. Compare baseline and optimized plans
 ```bash
 planforge compare baseline.json optimized.json
 ```
 
-### 5. Anonymize sensitive plans
+### 6. Anonymize sensitive plans
 ```bash
 planforge anonymize sensitive_plan.json -o sanitized_plan.json
 ```

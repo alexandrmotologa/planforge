@@ -67,10 +67,31 @@ type IndexRecommendation struct {
 	IndexName       string   `json:"index_name"`
 	DDLPostgres     string   `json:"ddl_postgres"`
 	DDLMySQL        string   `json:"ddl_mysql"`
+	HypoPGSQL       string   `json:"hypopg_sql,omitempty"`
 	Columns         []string `json:"columns"`
 	FilterPredicate string   `json:"filter_predicate"`
 	EstimatedImpact string   `json:"estimated_impact"`
 	Reason          string   `json:"reason"`
+	IsFunctional    bool     `json:"is_functional,omitempty"`
+}
+
+// JITFinding records Just-In-Time compilation overhead.
+type JITFinding struct {
+	JITTimeMs       float64  `json:"jit_time_ms"`
+	ExecutionTimeMs float64  `json:"execution_time_ms"`
+	OverheadPercent float64  `json:"overhead_percent"`
+	Severity        Severity `json:"severity"`
+	Message         string   `json:"message"`
+	Recommendation  string   `json:"recommendation"`
+}
+
+// AntiPatternFinding records sub-optimal query patterns visible in execution plans.
+type AntiPatternFinding struct {
+	NodeID         string   `json:"node_id,omitempty"`
+	PatternType    string   `json:"pattern_type"`
+	Severity       Severity `json:"severity"`
+	Message        string   `json:"message"`
+	Recommendation string   `json:"recommendation"`
 }
 
 // FullReport contains the complete diagnostic evaluation of a query plan.
@@ -82,6 +103,8 @@ type FullReport struct {
 	EstimationAnomalies    []EstimationFinding       `json:"estimation_anomalies"`
 	BufferEfficiency       BufferEfficiencyFinding   `json:"buffer_efficiency"`
 	MemorySpills           []MemorySpillFinding      `json:"memory_spills"`
+	JITFinding             *JITFinding               `json:"jit_finding,omitempty"`
+	AntiPatterns           []AntiPatternFinding      `json:"anti_patterns,omitempty"`
 	IndexRecommendations   []IndexRecommendation     `json:"index_recommendations"`
 	QuickInsights          []string                  `json:"quick_insights"`
 }

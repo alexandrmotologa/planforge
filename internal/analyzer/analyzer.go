@@ -17,6 +17,8 @@ func EvaluatePlan(plan *parser.Plan, indexRecs []IndexRecommendation) *FullRepor
 	estimationAnomalies := AnalyzeEstimationAnomalies(plan)
 	bufferEfficiency := AnalyzeBufferEfficiency(plan)
 	memorySpills := AnalyzeMemorySpills(plan)
+	jitFinding := AnalyzeJIT(plan)
+	antiPatterns := AnalyzeAntiPatterns(plan)
 
 	score := 100
 
@@ -48,6 +50,24 @@ func EvaluatePlan(plan *parser.Plan, indexRecs []IndexRecommendation) *FullRepor
 	// Deduct for memory spills
 	for range memorySpills {
 		score -= 20
+	}
+
+	// Deduct for JIT overhead
+	if jitFinding != nil {
+		if jitFinding.Severity == SeverityCritical {
+			score -= 20
+		} else {
+			score -= 10
+		}
+	}
+
+	// Deduct for anti-patterns
+	for _, ap := range antiPatterns {
+		if ap.Severity == SeverityCritical {
+			score -= 15
+		} else {
+			score -= 5
+		}
 	}
 
 	if score < 0 {
@@ -84,6 +104,12 @@ func EvaluatePlan(plan *parser.Plan, indexRecs []IndexRecommendation) *FullRepor
 	if len(memorySpills) > 0 {
 		insights = append(insights, "Detected memory overflow to disk temporary storage during execution.")
 	}
+	if jitFinding != nil {
+		insights = append(insights, fmt.Sprintf("JIT compilation took %.2f ms (%.1f%% of query duration).", jitFinding.JITTimeMs, jitFinding.OverheadPercent))
+	}
+	if len(antiPatterns) > 0 {
+		insights = append(insights, fmt.Sprintf("Found %d SQL anti-pattern(s) impacting plan efficiency.", len(antiPatterns)))
+	}
 	if len(insights) == 0 {
 		insights = append(insights, "Plan execution profile is well balanced with good buffer cache locality.")
 	}
@@ -96,6 +122,8 @@ func EvaluatePlan(plan *parser.Plan, indexRecs []IndexRecommendation) *FullRepor
 		EstimationAnomalies:  estimationAnomalies,
 		BufferEfficiency:     bufferEfficiency,
 		MemorySpills:         memorySpills,
+		JITFinding:           jitFinding,
+		AntiPatterns:         antiPatterns,
 		IndexRecommendations: indexRecs,
 		QuickInsights:        insights,
 	}

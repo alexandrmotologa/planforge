@@ -158,6 +158,10 @@ func ParsePostgresJSON(data []byte) (*Plan, error) {
 		})
 	}
 
+	if wrapper.JIT != nil {
+		plan.JIT = parseJITStats(wrapper.JIT)
+	}
+
 	// Calculate timing metrics and summary
 	computeMetrics(plan)
 
@@ -373,4 +377,42 @@ func computeMetrics(plan *Plan) {
 	}
 
 	plan.Summary = summary
+}
+
+func parseJITStats(raw map[string]any) *JITStats {
+	stats := &JITStats{
+		Options: make(map[string]bool),
+	}
+
+	if f, ok := raw["Functions"].(float64); ok {
+		stats.Functions = int(f)
+	}
+
+	if opts, ok := raw["Options"].(map[string]any); ok {
+		for k, v := range opts {
+			if b, ok := v.(bool); ok {
+				stats.Options[k] = b
+			}
+		}
+	}
+
+	if timing, ok := raw["Timing"].(map[string]any); ok {
+		if g, ok := timing["Generation"].(float64); ok {
+			stats.Timing.GenerationMs = g
+		}
+		if i, ok := timing["Inlining"].(float64); ok {
+			stats.Timing.InliningMs = i
+		}
+		if o, ok := timing["Optimization"].(float64); ok {
+			stats.Timing.OptimizationMs = o
+		}
+		if e, ok := timing["Emission"].(float64); ok {
+			stats.Timing.EmissionMs = e
+		}
+		if t, ok := timing["Total"].(float64); ok {
+			stats.Timing.TotalMs = t
+		}
+	}
+
+	return stats
 }

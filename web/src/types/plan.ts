@@ -168,10 +168,29 @@ export interface IndexRecommendation {
   index_name: string;
   ddl_postgres: string;
   ddl_mysql: string;
+  hypopg_sql?: string;
   columns: string[];
   filter_predicate: string;
   estimated_impact: string;
   reason: string;
+  is_functional?: boolean;
+}
+
+export interface JITFinding {
+  jit_time_ms: number;
+  execution_time_ms: number;
+  overhead_percent: number;
+  severity: FindingSeverity;
+  message: string;
+  recommendation: string;
+}
+
+export interface AntiPatternFinding {
+  node_id?: string;
+  pattern_type: string;
+  severity: FindingSeverity;
+  message: string;
+  recommendation: string;
 }
 
 export interface FullReport {
@@ -182,6 +201,8 @@ export interface FullReport {
   estimation_anomalies: EstimationFinding[];
   buffer_efficiency: BufferEfficiencyFinding;
   memory_spills: MemorySpillFinding[];
+  jit_finding?: JITFinding;
+  anti_patterns?: AntiPatternFinding[];
   index_recommendations: IndexRecommendation[];
   quick_insights: string[];
 }

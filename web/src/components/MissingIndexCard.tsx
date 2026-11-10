@@ -9,7 +9,7 @@ interface Props {
 
 export const MissingIndexCard: React.FC<Props> = ({ recommendations, engine }) => {
   const [copiedMap, setCopiedMap] = useState<Record<string, boolean>>({});
-  const [activeEngineMap, setActiveEngineMap] = useState<Record<string, 'postgres' | 'mysql'>>({});
+  const [activeEngineMap, setActiveEngineMap] = useState<Record<string, 'postgres' | 'mysql' | 'hypopg'>>({});
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -58,7 +58,7 @@ export const MissingIndexCard: React.FC<Props> = ({ recommendations, engine }) =
       <div className="space-y-4">
         {recommendations.map((rec) => {
           const currentEngine = activeEngineMap[rec.node_id] || (engine === 'mysql' ? 'mysql' : 'postgres');
-          const ddl = currentEngine === 'postgres' ? rec.ddl_postgres : rec.ddl_mysql;
+          let ddl = currentEngine === 'postgres' ? rec.ddl_postgres : currentEngine === 'mysql' ? rec.ddl_mysql : (rec.hypopg_sql || rec.ddl_postgres);
           const isCopied = copiedMap[rec.node_id];
 
           return (
@@ -72,6 +72,11 @@ export const MissingIndexCard: React.FC<Props> = ({ recommendations, engine }) =
                   <span className="text-[11px] px-2 py-0.5 rounded bg-gray-800 text-cyan-400 border border-gray-700">
                     table: {rec.table}
                   </span>
+                  {rec.is_functional && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-700/60">
+                      Functional Index
+                    </span>
+                  )}
                 </div>
 
                 {/* Dialect Switcher */}
@@ -93,6 +98,16 @@ export const MissingIndexCard: React.FC<Props> = ({ recommendations, engine }) =
                     }`}
                   >
                     MySQL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveEngineMap((prev) => ({ ...prev, [rec.node_id]: 'hypopg' }))}
+                    className={`px-2 py-0.5 rounded transition ${
+                      currentEngine === 'hypopg' ? 'bg-purple-600 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                    }`}
+                    title="Simulate index in PostgreSQL without creating physical files"
+                  >
+                    HypoPG Simulation
                   </button>
                 </div>
               </div>

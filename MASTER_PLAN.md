@@ -166,19 +166,34 @@ B:\workgit\planforge\
    - Classification: Memory allocation bottleneck.
    - Output: Recommendation to configure `SET work_mem = '...';`.
 
+5. **JIT Compilation Overhead**:
+   - Condition: JIT compilation duration exceeds 20% of query turnaround or exceeds execution duration.
+   - Classification: JIT compiler overhead bottleneck.
+   - Output: Recommendation to configure `SET jit = off;` or tune `jit_above_cost`.
+
+6. **SQL Anti-Patterns**:
+   - Condition: Correlated SubPlan loops, implicit typecasts on indexed columns, or lossy bitmap rechecks.
+   - Classification: Query structure antipattern.
+   - Output: Targeted SQL rewrite instructions (JOIN/CTE) or schema alignment.
+
 ### Index DDL synthesis rules
 
 When an unindexed table scan (`Seq Scan` or MySQL `table scan`) with predicate filters is detected:
 1. Extract equality columns (`col = value` or `col IS NULL`). Place these first in index definition.
-2. Extract inequality or range columns (`col > value`, `col BETWEEN a AND b`). Place after equality columns.
-3. Inspect subsequent or parent `Sort` operations on the same table. If sort keys align with index order, append them to avoid explicit sort steps.
-4. Output:
+2. Extract functional expressions (`lower(email)`, `upper(name)`). Formulate functional indexes to prevent table scans on expression lookups.
+3. Extract inequality or range columns (`col > value`, `col BETWEEN a AND b`). Place after equality columns.
+4. Inspect subsequent or parent `Sort` operations on the same table. If sort keys align with index order, append them to avoid explicit sort steps.
+5. Generate HypoPG simulation SQL (`SELECT * FROM hypopg_create_index(...)`) for testing planner cost drop without disk allocation.
+6. Output:
    ```sql
    -- PostgreSQL
    CREATE INDEX CONCURRENTLY idx_<table>_<cols> ON <table> (<col1>, <col2>);
 
    -- MySQL
    CREATE INDEX idx_<table>_<cols> ON <table> (<col1>, <col2>);
+
+   -- HypoPG Simulation
+   SELECT * FROM hypopg_create_index('CREATE INDEX ON <table> (<col1>, <col2>)');
    ```
 
 ---

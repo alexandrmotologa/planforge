@@ -18,6 +18,7 @@ import (
 	"github.com/alexandrmotologa/planforge/internal/api"
 	"github.com/alexandrmotologa/planforge/internal/exporter"
 	"github.com/alexandrmotologa/planforge/internal/parser"
+	"github.com/alexandrmotologa/planforge/internal/runner"
 )
 
 const version = "1.0.0"
@@ -35,6 +36,8 @@ func main() {
 		cmdServe(os.Args[2:])
 	case "analyze":
 		cmdAnalyze(os.Args[2:])
+	case "run":
+		cmdRun(os.Args[2:])
 	case "export":
 		cmdExport(os.Args[2:])
 	case "anonymize":
@@ -64,6 +67,7 @@ func printUsage() {
 
 Usage:
   planforge serve [--host 127.0.0.1] [--port 8080] [--open]
+  planforge run --db "<connection-dsn>" "<sql-query>" [--safe] [--open]
   planforge analyze <plan-file> [--anonymize]
   planforge export <plan-file> -o <report.html> [--anonymize]
   planforge anonymize <plan-file> -o <scrubbed.json>
@@ -73,6 +77,7 @@ Usage:
 
 Commands:
   serve       Start local web studio with embedded interactive DAG visualizer
+  run         Execute EXPLAIN directly against a live PostgreSQL or MySQL database
   analyze     Analyze query plan in terminal with time hog and index recommendations
   export      Generate standalone offline interactive HTML report (zero cloud dependencies)
   anonymize   Scrub table names, columns, and literals for secure sharing
@@ -171,6 +176,57 @@ func cmdAnalyze(args []string) {
 	}
 
 	printTerminalReport(report)
+}
+
+func cmdRun(args []string) {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	dbURL := fs.String("db", "", "Database DSN (e.g. postgres://user:pass@localhost:5432/dbname)")
+	safeMode := fs.Bool("safe", true, "Execute in a rolled-back transaction (safe for write queries)")
+	timeout := fs.Int("timeout", 30, "Query timeout in seconds")
+	openBrowser := fs.Bool("open", false, "Open local web studio in browser after execution")
+	fs.Parse(normalizeArgs(args))
+
+	queryArgs := fs.Args()
+	if *dbURL == "" || len(queryArgs) == 0 {
+		fmt.Fprintln(os.Stderr, "Error: Specify database connection and query.")
+		fmt.Fprintln(os.Stderr, "Usage: planforge run --db \"postgres://...\" \"SELECT ...\" [--safe] [--open]")
+		os.Exit(1)
+	}
+
+	query := strings.Join(queryArgs, " ")
+	fmt.Printf("Connecting to database and running EXPLAIN (ANALYZE, BUFFERS)...\n")
+
+	rawPlan, err := runner.ExecuteExplain(runner.RunOptions{
+		DatabaseURL: *dbURL,
+		Query:       query,
+		SafeMode:    *safeMode,
+		TimeoutSec:  *timeout,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Execution failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	plan, err := parser.DetectAndParse(rawPlan)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Parse failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	indexRecs := advisor.RecommendIndexes(plan)
+	report := analyzer.EvaluatePlan(plan, indexRecs)
+
+	printTerminalReport(report)
+
+	if *openBrowser {
+		staticFS, _ := planforge.GetStaticFS()
+		router := api.NewRouter(staticFS)
+		addr := "127.0.0.1:8080"
+		url := "http://127.0.0.1:8080"
+		fmt.Printf("\nLaunching web studio at %s...\n", url)
+		openURL(url)
+		http.ListenAndServe(addr, router)
+	}
 }
 
 func cmdExport(args []string) {
@@ -366,15 +422,39 @@ func printTerminalReport(r *analyzer.FullReport) {
 		fmt.Println()
 	}
 
+	// JIT Overhead
+	if r.JITFinding != nil {
+		fmt.Println("JUST-IN-TIME (JIT) COMPILATION OVERHEAD:")
+		fmt.Printf("  * [%s] %s\n", strings.ToUpper(string(r.JITFinding.Severity)), r.JITFinding.Message)
+		fmt.Printf("    Advice: %s\n\n", r.JITFinding.Recommendation)
+	}
+
+	// SQL Anti-Patterns
+	if len(r.AntiPatterns) > 0 {
+		fmt.Println("SQL ANTI-PATTERNS & STRUCTURAL BOTTLENECK FLAGS:")
+		for _, ap := range r.AntiPatterns {
+			fmt.Printf("  * [%s] %s: %s\n", strings.ToUpper(string(ap.Severity)), ap.PatternType, ap.Message)
+			fmt.Printf("    Advice: %s\n", ap.Recommendation)
+		}
+		fmt.Println()
+	}
+
 	// Index Recommendations
 	if len(r.IndexRecommendations) > 0 {
 		fmt.Println("MISSING INDEX RECOMMENDATIONS:")
 		for _, rec := range r.IndexRecommendations {
-			fmt.Printf("  Index: %s ON %s (%s)\n", rec.IndexName, rec.Table, strings.Join(rec.Columns, ", "))
+			extra := ""
+			if rec.IsFunctional {
+				extra = " [Functional Index]"
+			}
+			fmt.Printf("  Index: %s ON %s (%s)%s\n", rec.IndexName, rec.Table, strings.Join(rec.Columns, ", "), extra)
 			fmt.Printf("  Impact: %s\n", rec.EstimatedImpact)
 			fmt.Println("  SQL Statement:")
 			for _, line := range strings.Split(rec.DDLPostgres, "\n") {
 				fmt.Printf("    %s\n", line)
+			}
+			if rec.HypoPGSQL != "" {
+				fmt.Printf("  HypoPG Simulation:\n    %s\n", rec.HypoPGSQL)
 			}
 			fmt.Println()
 		}

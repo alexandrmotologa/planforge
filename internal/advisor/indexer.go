@@ -15,6 +15,7 @@ var (
 	reIsPredicate    = regexp.MustCompile(`(?:(?:\w+\.)?([a-zA-Z_][a-zA-Z0-9_]*))\s+IS\s+(NOT\s+)?(NULL|TRUE|FALSE)`)
 	reRangePredicate = regexp.MustCompile(`(?:(?:\w+\.)?([a-zA-Z_][a-zA-Z0-9_]*))\s*(?:>|<|>=|<=|BETWEEN)\s*([^()ANDandORor]+)`)
 	reInPredicate    = regexp.MustCompile(`(?:(?:\w+\.)?([a-zA-Z_][a-zA-Z0-9_]*))\s+IN\s*\(([^)]+)\)`)
+	reFuncPredicate  = regexp.MustCompile(`(?i)(lower|upper|date|trim|coalesce)\s*\(([a-zA-Z0-9_]+)\)`)
 )
 
 // PredicateAnalysis holds extracted equality and range columns.
@@ -22,6 +23,7 @@ type PredicateAnalysis struct {
 	EqualityColumns []string
 	RangeColumns    []string
 	SortColumns     []string
+	IsFunctional    bool
 }
 
 // RecommendIndexes analyzes execution plan nodes and synthesizes composite index recommendations.
@@ -110,10 +112,14 @@ func RecommendIndexes(plan *parser.Plan) []analyzer.IndexRecommendation {
 
 		ddlPG := fmt.Sprintf("CREATE INDEX CONCURRENTLY %s\nON %s (%s);", indexName, cleanTable, strings.Join(finalCols, ", "))
 		ddlMY := fmt.Sprintf("CREATE INDEX %s\nON %s (%s);", indexName, cleanTable, strings.Join(finalCols, ", "))
+		hypoPG := fmt.Sprintf("SELECT * FROM hypopg_create_index('CREATE INDEX ON %s (%s)');", cleanTable, strings.Join(finalCols, ", "))
 
 		impact := fmt.Sprintf("Converts %s on %s into an index lookup.", n.NodeType, cleanTable)
 		if n.RowsRemovedByFilter > 0 {
 			impact += fmt.Sprintf(" Avoids evaluating %d rows discarded by filter.", n.RowsRemovedByFilter)
+		}
+		if pred.IsFunctional {
+			impact += " Uses functional index expression to prevent sequential scan on calculated column."
 		}
 
 		recommendations = append(recommendations, analyzer.IndexRecommendation{
@@ -122,10 +128,12 @@ func RecommendIndexes(plan *parser.Plan) []analyzer.IndexRecommendation {
 			IndexName:       indexName,
 			DDLPostgres:     ddlPG,
 			DDLMySQL:        ddlMY,
+			HypoPGSQL:       hypoPG,
 			Columns:         finalCols,
 			FilterPredicate: n.Filter,
 			EstimatedImpact: impact,
 			Reason:          fmt.Sprintf("Table scan detected with selective filter expression: %s", n.Filter),
+			IsFunctional:    pred.IsFunctional,
 		})
 	}
 
@@ -139,6 +147,17 @@ func parsePredicates(filter string) PredicateAnalysis {
 	// Clean backticks and quotes
 	cleaned = strings.ReplaceAll(cleaned, "`", "")
 	cleaned = strings.ReplaceAll(cleaned, "\"", "")
+
+	// Check functional expressions e.g. lower(email), upper(name), date(created_at)
+	for _, match := range reFuncPredicate.FindAllStringSubmatch(cleaned, -1) {
+		if len(match) > 2 {
+			funcExpr := fmt.Sprintf("%s(%s)", strings.ToLower(match[1]), match[2])
+			if !contains(analysis.EqualityColumns, funcExpr) {
+				analysis.EqualityColumns = append(analysis.EqualityColumns, funcExpr)
+				analysis.IsFunctional = true
+			}
+		}
+	}
 
 	// Extract Equality
 	for _, match := range reEqPredicate.FindAllStringSubmatch(cleaned, -1) {
@@ -187,6 +206,8 @@ func generateIndexName(table string, columns []string) string {
 	var cleanCols []string
 	for _, c := range columns {
 		colOnly := strings.Fields(c)[0]
+		colOnly = strings.ReplaceAll(colOnly, "(", "_")
+		colOnly = strings.ReplaceAll(colOnly, ")", "")
 		cleanCols = append(cleanCols, colOnly)
 	}
 	base := fmt.Sprintf("idx_%s_%s", table, strings.Join(cleanCols, "_"))

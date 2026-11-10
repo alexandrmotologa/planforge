@@ -25,10 +25,15 @@ The analysis workflow consists of four sequential stages:
 - `estimation.go`: Detects catalog misestimates where the ratio between actual and estimated row count exceeds 10x.
 - `buffers.go`: Measures shared buffer hits against disk block reads, translating block counts into physical read megabytes.
 - `memory_spills.go`: Flags operators writing to temporary files on disk due to memory constraints (`work_mem`).
+- `jit.go`: Evaluates Just-In-Time compilation overhead, alerting when JIT compilation exceeds query execution time.
+- `antipatterns.go`: Identifies SQL anti-patterns including correlated SubPlan loops, implicit typecasts, and lossy bitmap rechecks.
 - `analyzer.go`: Combines individual findings into an aggregate health score (0 to 100) and letter grade (A through F).
 
 ### Index advisor (`internal/advisor`)
-- `indexer.go`: Extracts column names from filter expressions. Places equality predicates (`col = val`, `col IS NULL`) at the start of composite index definitions, appends range predicates (`col > val`, `BETWEEN`), and adds order keys from subsequent sort nodes.
+- `indexer.go`: Extracts column names and functional expressions (`lower(email)`) from filter expressions. Places equality predicates (`col = val`, `col IS NULL`) at the start of composite index definitions, appends range predicates (`col > val`, `BETWEEN`), and adds order keys from subsequent sort nodes. Generates HypoPG hypothetical index statements for cost simulation without physical storage allocation.
+
+### Live runner (`internal/runner`)
+- `runner.go`: Connects directly to PostgreSQL or MySQL databases using native drivers, executing `EXPLAIN (ANALYZE, BUFFERS)` in safe rolled-back transactions.
 
 ### Schema anonymizer (`internal/anonymizer`)
 - `sanitizer.go`: Replaces table names (`tbl_1`), column names (`col_1`), and literal filter values (`'***'`) with generic tokens while preserving plan structure and execution metrics for secure external sharing.

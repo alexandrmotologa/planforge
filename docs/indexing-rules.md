@@ -25,6 +25,22 @@ When a table scan has a `Filter` clause:
    ON orders (tenant_id, created_at DESC);
    ```
 
+4. **Functional expressions (`lower(email)`, `upper(name)`)**:
+   When filter predicates apply functions to columns, standard B-tree column indexes are bypassed. PlanForge detects functional predicates and synthesizes functional expressions:
+   ```sql
+   CREATE INDEX CONCURRENTLY idx_users_lower_email
+   ON users (lower(email));
+   ```
+
+## HypoPG simulation (Testing without disk allocation)
+
+For multi-gigabyte or terabyte tables, building an index can take hours and consume gigabytes of storage. PlanForge generates simulation commands for the PostgreSQL `hypopg` extension:
+```sql
+SELECT * FROM hypopg_create_index('CREATE INDEX ON orders (tenant_id, status, created_at)');
+EXPLAIN SELECT ...;
+```
+This enables developers and DBAs to verify whether the query planner will use the proposed index and how much the estimated cost drops before creating physical files.
+
 ## Concurrent creation in production
 
 PlanForge generates PostgreSQL statements using `CREATE INDEX CONCURRENTLY`. In PostgreSQL, standard index creation locks the target table against concurrent writes (`INSERT`, `UPDATE`, `DELETE`) until the index build finishes. Adding the `CONCURRENTLY` keyword allows writes to proceed uninterrupted during index construction.

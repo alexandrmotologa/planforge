@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, AlertCircle } from 'lucide-react';
+import { Zap, AlertCircle, Share2, Check, Keyboard } from 'lucide-react';
 import type { CompareResponse, FullReport, PlanNode, SamplePlan } from './types/plan';
 import { analyzePlan, comparePlans, exportPlanHtml, fetchSamples } from './lib/api';
+import { encodePlanToHash, decodePlanFromHash } from './lib/urlSharing';
 import { PlanInputEditor } from './components/PlanInputEditor';
 import { SummaryHeader } from './components/SummaryHeader';
 import { PlanDagCanvas } from './components/PlanDagCanvas';
 import { NodeDetailDrawer } from './components/NodeDetailDrawer';
 import { TimeWaterfall } from './components/TimeWaterfall';
 import { BufferWaterfall } from './components/BufferWaterfall';
+import { FlameGraph } from './components/FlameGraph';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { MissingIndexCard } from './components/MissingIndexCard';
 import { PlanComparisonView } from './components/PlanComparisonView';
+import { ShortcutsModal } from './components/ShortcutsModal';
 
 export const App: React.FC = () => {
   const [report, setReport] = useState<FullReport | null>(null);
@@ -19,14 +23,27 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<'single' | 'compare'>('single');
+  const [isCopiedShare, setIsCopiedShare] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [globalToast, setGlobalToast] = useState<string | null>(null);
 
-  // Load sample presets on mount
+  const showToast = (msg: string) => {
+    setGlobalToast(msg);
+    setTimeout(() => setGlobalToast(null), 3000);
+  };
+
+  // Load sample presets or URL hash on mount
   useEffect(() => {
+    const fromHash = decodePlanFromHash();
+    if (fromHash) {
+      handleAnalyze(fromHash, false);
+      showToast('Loaded execution plan from URL');
+    }
+
     fetchSamples()
       .then((data) => {
         setSamples(data);
-        // Automatically analyze first preset on load
-        if (data.length > 0) {
+        if (!fromHash && data.length > 0) {
           handleAnalyze(data[0].raw_content, false);
         }
       })
@@ -34,6 +51,59 @@ export const App: React.FC = () => {
         // Fallback default sample if server is initializing
       });
   }, []);
+
+  // Global Paste Listener (Ctrl+V anywhere in window)
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      // Don't intercept if user is typing in a textarea or input
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        return;
+      }
+
+      const pasted = e.clipboardData?.getData('text');
+      if (pasted && pasted.trim()) {
+        const trimmed = pasted.trim();
+        if (
+          trimmed.startsWith('{') ||
+          trimmed.startsWith('[') ||
+          trimmed.includes('Seq Scan') ||
+          trimmed.includes('Index Scan') ||
+          trimmed.includes('cost=') ||
+          trimmed.includes('query_block')
+        ) {
+          e.preventDefault();
+          showToast('Pasted execution plan detected');
+          handleAnalyze(trimmed, false);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, []);
+
+  // Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT');
+
+      if (e.key === '?' && !isInput) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setIsShortcutsOpen(false);
+        setSelectedNode(null);
+      } else if (e.key === 'e' && !isInput && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleExport();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [report]);
 
   const handleAnalyze = async (planText: string, anonymize: boolean) => {
     setIsLoading(true);
@@ -75,12 +145,22 @@ export const App: React.FC = () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      showToast('Exported standalone HTML report');
     } catch (err: any) {
       alert('Export failed: ' + err.message);
     }
   };
 
-  // Helper to extract all nodes flat for waterfall
+  const handleShareLink = () => {
+    if (!report || !report.plan.raw_input) return;
+    const hash = encodePlanToHash(report.plan.raw_input);
+    const fullURL = `${window.location.origin}${window.location.pathname}${hash}`;
+    navigator.clipboard.writeText(fullURL);
+    setIsCopiedShare(true);
+    showToast('Zero-server link copied to clipboard');
+    setTimeout(() => setIsCopiedShare(false), 2500);
+  };
+
   const flattenNodes = (node: PlanNode | undefined): PlanNode[] => {
     if (!node) return [];
     const list: PlanNode[] = [node];
@@ -97,7 +177,7 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#090d16] text-gray-100 flex flex-col">
       {/* Top Navbar */}
-      <header className="bg-[#0f172a] border-b border-[#1f2937] px-6 py-3.5 sticky top-0 z-50 shadow-md">
+      <header className="bg-[#0f172a] border-b border-[#1f2937] px-6 py-3.5 sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30">
@@ -116,7 +196,37 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {report && (
+              <button
+                type="button"
+                onClick={handleShareLink}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f2937] hover:bg-[#374151] border border-gray-700 text-xs font-semibold text-gray-200 transition"
+                title="Copy shareable link encoded in URL hash"
+              >
+                {isCopiedShare ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400">Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Share URL</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsShortcutsOpen(true)}
+              className="p-1.5 rounded-lg bg-[#1f2937] hover:bg-[#374151] border border-gray-700 text-gray-300 transition"
+              title="Keyboard Shortcuts (?)"
+            >
+              <Keyboard className="w-4 h-4" />
+            </button>
+
             <a
               href="https://github.com/alexandrmotologa/planforge"
               target="_blank"
@@ -131,6 +241,14 @@ export const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Floating Global Toast */}
+      {globalToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl animate-fade-in flex items-center gap-2">
+          <Zap className="w-3.5 h-3.5 fill-current" />
+          <span>{globalToast}</span>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-6 py-6 flex-1 w-full">
@@ -165,11 +283,17 @@ export const App: React.FC = () => {
           <div className="space-y-6">
             <SummaryHeader report={report} onExport={handleExport} />
 
-            {/* Split layout: Tree + Waterfalls on Left, Deep Inspector on Right */}
+            {/* Split layout: Tree + FlameGraph + Waterfalls on Left, Deep Inspector on Right */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column (8 cols) */}
               <div className="lg:col-span-8 space-y-6">
                 <PlanDagCanvas
+                  root={report.plan.root}
+                  selectedNode={selectedNode}
+                  onSelectNode={setSelectedNode}
+                />
+
+                <FlameGraph
                   root={report.plan.root}
                   selectedNode={selectedNode}
                   onSelectNode={setSelectedNode}
@@ -185,6 +309,8 @@ export const App: React.FC = () => {
                   efficiency={report.buffer_efficiency}
                   nodes={allNodes}
                 />
+
+                <DiagnosticsPanel report={report} />
 
                 <MissingIndexCard
                   recommendations={report.index_recommendations}
@@ -203,6 +329,9 @@ export const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Shortcuts Modal */}
+      <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
 
       {/* Footer */}
       <footer className="border-t border-[#1f2937] py-6 px-6 text-center text-xs text-gray-500 bg-[#090d16]">
