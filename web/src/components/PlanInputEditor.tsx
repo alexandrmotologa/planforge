@@ -28,6 +28,29 @@ export const PlanInputEditor: React.FC<Props> = ({
     setSingleText(sample.raw_content);
   };
 
+  const handleLoadCompareSample = () => {
+    if (samples.length > 0) {
+      const base = samples[0].raw_content;
+      try {
+        const opt = JSON.parse(base);
+        opt[0]["Execution Time"] = 1.35;
+        opt[0]["Planning Time"] = 0.12;
+        opt[0].Plan["Node Type"] = "Index Scan";
+        opt[0].Plan["Index Name"] = "idx_orders_customer_status";
+        opt[0].Plan["Actual Total Time"] = 1.25;
+        opt[0].Plan["Total Cost"] = 12.4;
+        opt[0].Plan["Actual Rows"] = 150;
+        opt[0].Plan["Shared Hit Blocks"] = 18;
+        opt[0].Plan["Shared Read Blocks"] = 0;
+        setBaseText(base);
+        setOptText(JSON.stringify(opt, null, 2));
+      } catch {
+        setBaseText(base);
+        setOptText(base);
+      }
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'single' | 'base' | 'opt') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -81,7 +104,7 @@ export const PlanInputEditor: React.FC<Props> = ({
         </div>
 
         {activeMode === 'single' && samples.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-400 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Presets:
             </span>
@@ -94,10 +117,23 @@ export const PlanInputEditor: React.FC<Props> = ({
                   className="px-2.5 py-1 text-xs bg-[#1f2937] hover:bg-[#374151] text-gray-200 rounded border border-gray-700 transition"
                   title={s.description}
                 >
-                  {s.title.split(' ')[1] || s.title}
+                  {s.title}
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {activeMode === 'compare' && samples.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLoadCompareSample}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#1f2937] hover:bg-[#374151] text-emerald-300 rounded border border-emerald-800/40 transition font-semibold"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              Load Sample A/B Comparison
+            </button>
           </div>
         )}
       </div>

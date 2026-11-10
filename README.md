@@ -1,8 +1,41 @@
-# PlanForge
+<p align="center">
+  <img src="docs/images/logo.png" alt="PlanForge Logo" width="130" style="border-radius: 24px;" />
+</p>
+<h1 align="center">PlanForge</h1>
+<p align="center">
+  <strong>Self-Hosted PostgreSQL &amp; MySQL Execution Plan Visualizer, Buffer Cost Waterfall &amp; Missing Index Advisor</strong>
+</p>
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
+  <img src="https://img.shields.io/badge/memory-%3C%2030MB%20RAM-emerald.svg" alt="Memory Footprint" />
+  <img src="https://img.shields.io/badge/privacy-100%25%20Offline-cyan.svg" alt="Local First" />
+  <img src="https://img.shields.io/badge/engines-PostgreSQL%20%7C%20MySQL-blueviolet.svg" alt="Supported Engines" />
+</p>
+
+<p align="center">
+  <img src="docs/images/planforge_demo.gif" alt="PlanForge Interactive Studio Demo" width="100%" style="border-radius: 12px; border: 1px solid #1f2937;" />
+</p>
 
 Self-hosted PostgreSQL and MySQL query execution plan visualizer, buffer cost waterfall, and missing index advisor operating in a single binary under 30MB of RAM.
 
 PlanForge runs completely offline and local-first. It replaces third-party cloud paste sites like explain.depesz.com and explain.dalibo.com, eliminating the risk of transmitting confidential production schemas, table structures, row counts, and tenant data to external servers.
+
+---
+
+## Visual Tour
+
+| Execution DAG & Node Inspector | FlameChart & Latency Waterfall |
+| :---: | :---: |
+| ![Desktop Overview](docs/images/planforge-1.png) | ![FlameChart & Time Waterfall](docs/images/planforge-2.png) |
+
+| Missing Index Advisor & HypoPG Simulation | Performance Comparison (A/B Diff) |
+| :---: | :---: |
+| ![Missing Index Advisor](docs/images/planforge-3.png) | ![Performance Comparison A/B Diff](docs/images/planforge-4.png) |
+
+<p align="center">
+  <strong>Responsive Mobile &amp; Tablet Workspace</strong><br />
+  <img src="docs/images/planforge-5.png" alt="Mobile Responsive View" width="380" style="border-radius: 12px; border: 1px solid #1f2937; margin-top: 8px;" />
+</p>
 
 ---
 
