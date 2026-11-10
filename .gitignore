@@ -1,0 +1,28 @@
+# Binaries
+/planforge
+/planforge.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node & dependencies
+web/node_modules/
+web/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+report.html
+test_report.html
+scrubbed.json

@@ -1,0 +1,144 @@
+# PlanForge
+
+Self-hosted PostgreSQL and MySQL query execution plan visualizer, buffer cost waterfall, and missing index advisor operating in a single binary under 30MB of RAM.
+
+PlanForge runs completely offline and local-first. It replaces third-party cloud paste sites like explain.depesz.com and explain.dalibo.com, eliminating the risk of transmitting confidential production schemas, table structures, row counts, and tenant data to external servers.
+
+---
+
+## Capabilities
+
+- **PostgreSQL and MySQL support**: Ingests `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, raw `psql` text trees, MySQL `EXPLAIN FORMAT=JSON`, and MySQL 8.0 `EXPLAIN ANALYZE` outputs.
+- **Latency bottleneck detection**: Flags operators taking more than 50% of overall query execution time as critical time hogs.
+- **Planner estimation anomaly checks**: Compares actual row counts against planner row estimates. Discrepancies exceeding 10x signal stale catalog statistics and provide table-level `ANALYZE` commands.
+- **Buffer cache and disk inspection**: Computes shared buffer hit ratios and converts physical disk block reads into total megabytes read from storage.
+- **Automated missing index advisor**: Synthesizes production-ready `CREATE INDEX CONCURRENTLY` statements for PostgreSQL and standard index DDL for MySQL based on filter predicates and sort keys.
+- **Client-side schema anonymizer**: Replaces table names, column names, and literal filter parameters with generic tokens to enable safe team sharing without exposing business data.
+- **Plan comparison (A/B diff)**: Compares baseline and optimized query execution plans side by side, reporting percentage reductions in execution time, planner cost, and disk block reads.
+- **Standalone offline HTML export**: Exports self-contained interactive HTML reports that open in any browser without internet access or CDN dependencies.
+- **Minimal resource consumption**: Runs as a single compiled Go binary with an embedded React 19 studio, consuming less than 30MB of RAM.
+
+---
+
+## Installation
+
+### Pre-built binaries
+Download the latest binary for your operating system from GitHub Releases:
+- Linux (x86_64, aarch64)
+- macOS (Apple Silicon, Intel)
+- Windows (x64)
+
+### Using Go install
+```bash
+go install github.com/alexandrmotologa/planforge/cmd/planforge@latest
+```
+
+### Using Docker
+```bash
+docker run -p 8080:8080 alexandrmotologa/planforge:latest
+```
+
+### Building from source
+Requires Go 1.23+ and Node.js 20+:
+```bash
+git clone https://github.com/alexandrmotologa/planforge.git
+cd planforge
+make build
+```
+
+---
+
+## Quick start
+
+### 1. Launch the web studio
+Start the local server and open the browser interface:
+```bash
+planforge serve --port 8080 --open
+```
+Open `http://127.0.0.1:8080` in your web browser. Paste your query plan or select one of the built-in sample presets.
+
+### 2. Analyze plans from the command line
+Inspect query execution plans directly in the terminal:
+```bash
+planforge analyze plan.json
+```
+Output includes execution timings, time hog classifications, buffer cache efficiency, and recommended index statements.
+
+### 3. Generate a standalone offline HTML report
+```bash
+planforge export plan.json -o report.html
+```
+
+### 4. Compare baseline and optimized plans
+```bash
+planforge compare baseline.json optimized.json
+```
+
+### 5. Anonymize sensitive plans
+```bash
+planforge anonymize sensitive_plan.json -o sanitized_plan.json
+```
+
+---
+
+## Extracting execution plans
+
+### PostgreSQL
+Run `EXPLAIN` with `ANALYZE` and `BUFFERS`:
+```sql
+EXPLAIN (ANALYZE, BUFFERS, SETTINGS, WAL, FORMAT JSON)
+SELECT o.id, o.total_amount, c.name
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.status = 'active'
+  AND o.created_at >= '2026-01-01'
+ORDER BY o.created_at DESC;
+```
+
+To capture text output directly in `psql`:
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders WHERE tenant_id = 42;
+```
+
+### MySQL
+```sql
+EXPLAIN FORMAT=JSON
+SELECT * FROM orders WHERE status = 'shipped' ORDER BY created_at DESC;
+```
+
+For MySQL 8.0.18+:
+```sql
+EXPLAIN ANALYZE
+SELECT * FROM orders WHERE status = 'shipped';
+```
+
+See [docs/explain-cheatsheet.md](docs/explain-cheatsheet.md) for more details.
+
+---
+
+## HTTP API reference
+
+The embedded server exposes a JSON API:
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/plans/analyze` | POST | Analyzes execution plan and returns diagnostic findings and index recommendations |
+| `/api/v1/plans/compare` | POST | Compares baseline and optimized plans, calculating latency and cost deltas |
+| `/api/v1/plans/export` | POST | Generates a standalone offline HTML report file |
+| `/api/v1/samples` | GET | Returns built-in demonstration query plans |
+| `/health` | GET | Healthcheck returning application status and version |
+
+---
+
+## Documentation
+
+- [System Architecture](docs/architecture.md): Ingestion pipeline, models, and calculation details.
+- [EXPLAIN Command Reference](docs/explain-cheatsheet.md): Query plan extraction instructions.
+- [Index Recommendation Heuristics](docs/indexing-rules.md): Predicate parsing and composite index ordering rules.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
