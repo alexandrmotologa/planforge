@@ -46,7 +46,7 @@ func main() {
 		cmdCompare(os.Args[2:])
 	case "samples":
 		cmdSamples()
-	case "version", "--version", "-v":
+	case "version", "--version", "-v", "-V":
 		fmt.Printf("PlanForge v%s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
 	case "help", "--help", "-h":
 		printUsage()

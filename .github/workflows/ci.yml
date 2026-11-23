@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Web Bundle
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Verify Dependencies
+        run: go mod verify
+
+      - name: Run Go Tests
+        run: go test -v ./...
+
+      - name: Compile Single Binary
+        run: go build -o planforge ./cmd/planforge
+
+      - name: Verify CLI Version & Help Flags
+        run: |
+          ./planforge --version
+          ./planforge -v
+          ./planforge -V
+          ./planforge version
+          ./planforge help

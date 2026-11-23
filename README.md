@@ -6,6 +6,8 @@
   <strong>Self-Hosted PostgreSQL &amp; MySQL Execution Plan Visualizer, Buffer Cost Waterfall &amp; Missing Index Advisor</strong>
 </p>
 <p align="center">
+  <a href="https://github.com/alexandrmotologa/planforge/actions/workflows/ci.yml"><img src="https://github.com/alexandrmotologa/planforge/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://github.com/alexandrmotologa/planforge/releases"><img src="https://img.shields.io/github/v/release/alexandrmotologa/planforge?color=blue" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/memory-%3C%2030MB%20RAM-emerald.svg" alt="Memory Footprint" />
   <img src="https://img.shields.io/badge/privacy-100%25%20Offline-cyan.svg" alt="Local First" />
